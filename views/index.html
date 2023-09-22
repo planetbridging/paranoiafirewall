@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firewall Rules</title>
+  </head>
+  <body>
+    <h1>Firewall Rules</h1>
+    <form action="/add" method="post">
+      IP: <input type="text" name="ip" /><br />
+      Port: <input type="text" name="port" /><br />
+      Domain: <input type="text" name="domain" /><br />
+      Action:
+      <select name="action">
+        <option value="BLOCK">BLOCK</option>
+        <option value="ALLOW">ALLOW</option></select
+      ><br />
+      Protocol:
+      <select name="protocol">
+        <option value="tcp">TCP</option>
+        <option value="udp">UDP</option></select
+      ><br />
+      <input type="submit" value="Add Rule" />
+    </form>
+    <h2>Current Rules</h2>
+    <ul>
+      {{range $index, $rule := .Rules}}
+      <li>
+        IP: {{$rule.IP}}, Port: {{$rule.Port}}, Domain: {{$rule.Domain}},
+        Action: {{$rule.Action}}, Protocol: {{$rule.Protocol}}
+        <a href="/delete/{{$index}}">Delete</a>
+      </li>
+      {{end}}
+    </ul>
+  </body>
+</html>

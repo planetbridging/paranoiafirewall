@@ -1,0 +1,125 @@
+package main
+
+import (
+	"fmt"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"log"
+	"net"
+)
+
+type Rule struct {
+	SourceIP   string
+	DestIP     string
+	SourcePort int
+	DestPort   int
+	Action     string // "ALLOW" or "BLOCK"
+	Domain     string
+}
+
+var rules []Rule
+
+func startup() {
+	fmt.Println("Welcome to paranoiafirewall")
+	fmt.Println("Protection and Routing Against Network Overriding Intrusions and Attacks with Flexible and Intelligent Routing and Encryption for Wireless and Local-area Networks")
+}
+
+func mold() {
+	startup()
+
+	// Example rule: Block traffic from specific IP and port
+	rules = append(rules, Rule{
+		SourceIP:   "172.105.189.15",
+		SourcePort: 80,
+		Action:     "BLOCK",
+	})
+
+	// Rule to block a specific domain
+	rules = append(rules, Rule{
+		Domain: "planetbridging.com",
+		Action: "BLOCK",
+	})
+
+	// Get all network interfaces
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set up packet capture for each interface
+	for _, iface := range interfaces {
+		go capturePackets(iface.Name)
+	}
+
+	// Keep the main function running
+	select {}
+}
+
+func capturePackets(ifaceName string) {
+	handle, err := pcap.OpenLive(ifaceName, 1600, true, pcap.BlockForever)
+	if err != nil {
+		log.Printf("Error opening device %s: %v", ifaceName, err)
+		return
+	}
+	defer handle.Close()
+
+	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
+	for packet := range packetSource.Packets() {
+		handlePacket(packet)
+	}
+}
+
+func handlePacket(packet gopacket.Packet) {
+    // Handle IPv4 packets
+    ipLayer := packet.Layer(layers.LayerTypeIPv4)
+    if ipLayer != nil {
+        ip, _ := ipLayer.(*layers.IPv4)
+
+        // Check for TCP packets
+        tcpLayer := packet.Layer(layers.LayerTypeTCP)
+        if tcpLayer != nil {
+            tcp, _ := tcpLayer.(*layers.TCP)
+
+            // Check against firewall rules for IP and port blocking
+            for _, rule := range rules {
+                if rule.SourceIP == ip.SrcIP.String() && (rule.SourcePort == 0 || rule.SourcePort == int(tcp.SrcPort)) && rule.Action == "BLOCK" {
+                    log.Printf("Blocked TCP packet from IP: %s, Port: %d", ip.SrcIP, tcp.SrcPort)
+                    return
+                }
+            }
+        }
+
+        // Check for UDP packets
+        udpLayer := packet.Layer(layers.LayerTypeUDP)
+        if udpLayer != nil {
+            udp, _ := udpLayer.(*layers.UDP)
+
+            // Check against firewall rules for IP and port blocking
+            for _, rule := range rules {
+                if rule.SourceIP == ip.SrcIP.String() && (rule.SourcePort == 0 || rule.SourcePort == int(udp.SrcPort)) && rule.Action == "BLOCK" {
+                    log.Printf("Blocked UDP packet from IP: %s, Port: %d", ip.SrcIP, udp.SrcPort)
+                    return
+                }
+            }
+
+            // Check for DNS packets for domain blocking
+            if udp.DstPort == 53 { // DNS standard port
+                dnsLayer := packet.Layer(layers.LayerTypeDNS)
+                if dnsLayer != nil {
+                    dns, _ := dnsLayer.(*layers.DNS)
+
+                    for _, q := range dns.Questions {
+                        for _, rule := range rules {
+                            if string(q.Name) == rule.Domain && rule.Action == "BLOCK" {
+                                log.Printf("Blocked DNS request for domain: %s", q.Name)
+                                return
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

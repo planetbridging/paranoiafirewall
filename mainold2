@@ -1,0 +1,81 @@
+package main
+
+import (
+	"fmt"
+	"os/exec"
+	"strings"
+)
+
+type Rule struct {
+	IP       string
+	Port     int
+	Domain   string
+	Action   string // "BLOCK" or "ALLOW"
+	Protocol string // "tcp", "udp", etc.
+}
+
+var rules []Rule
+
+func molds() {
+	// Example rules
+	rules = append(rules, Rule{IP: "172.105.189.15", Action: "BLOCK"})
+	rules = append(rules, Rule{Port: 80, Action: "BLOCK", Protocol: "tcp"})
+	rules = append(rules, Rule{Domain: "planetbridging.com", Action: "BLOCK"})
+
+	// Apply the rules
+	for _, rule := range rules {
+		if rule.Action == "BLOCK" {
+			if rule.IP != "" {
+				blockIP(rule.IP)
+			}
+			if rule.Port != 0 {
+				blockPort(rule.Port, rule.Protocol)
+			}
+			if rule.Domain != "" {
+				blockDomain(rule.Domain)
+			}
+		}
+	}
+}
+
+func blockIP(ip string) {
+	cmd := exec.Command("iptables", "-A", "OUTPUT", "-d", ip, "-j", "DROP")
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error blocking IP:", err)
+	} else {
+		fmt.Printf("Blocked IP: %s\n", ip)
+	}
+}
+
+func blockPort(port int, protocol string) {
+	cmd := exec.Command("iptables", "-A", "OUTPUT", "-p", protocol, "--dport", fmt.Sprint(port), "-j", "DROP")
+	err := cmd.Run()
+	if err != nil {
+		fmt.Println("Error blocking port:", err)
+	} else {
+		fmt.Printf("Blocked %s port: %d\n", protocol, port)
+	}
+}
+
+func blockDomain(domain string) {
+	// Resolve domain to IP
+	ips, err := resolveDomain(domain)
+	if err != nil {
+		fmt.Println("Error resolving domain:", err)
+		return
+	}
+	for _, ip := range ips {
+		blockIP(ip)
+	}
+}
+
+func resolveDomain(domain string) ([]string, error) {
+	cmd := exec.Command("dig", "+short", domain)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(strings.TrimSpace(string(output)), "\n"), nil
+}
+
